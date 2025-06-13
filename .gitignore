@@ -1,1 +1,16 @@
 ## 파일
+.env
+test.pychromedriver --version
+chromedriver.exe
+LICENSE.chromedriver
+THIRD_PARTY_NOTICES.chromedriver
+bibimbap_crawler.py
+continue_crawl.py
+test.py
+upload_bibimbap_recipes.py
+bibimbap_recipe.txt
+bibimbap_recipes.json
+*crawl*.*
+
+## 폴더
+test/
