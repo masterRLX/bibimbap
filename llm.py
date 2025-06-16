@@ -1,4 +1,5 @@
 import os
+import json
 
 from dotenv import load_dotenv
 from langchain.chains import (create_history_aware_retriever,
@@ -86,7 +87,24 @@ def build_few_shot_examples() -> str:
 
     return formmated_few_shot_prompt
 
-def get_qa_prompt() :
+## [외부 사전 로드] ============================================================
+
+def load_dictionary_from_file(path = 'keyword-dictionary.json'):
+    with open(path, 'r', encoding='utf-8')as file:
+        return json.load(file)
+
+def build_dictionary_text(dictionary: dict) -> str:
+    return '\n'.join([
+        f'{k} ({",".join(v["tags"])}): {v["definition"]} [출처: {v["source"]}]'
+        for k, v in dictionary.items()
+    ])
+
+## QA prompt ====================================================================
+def build_qa_prompt() :
+    keyword_dictionary = load_dictionary_from_file()
+    dictionary_text = build_dictionary_text(keyword_dictionary)
+
+
     system_prompt = (
         '''[identity]
 
@@ -98,20 +116,28 @@ def get_qa_prompt() :
 -필요한 경우 이모티콘을 활용해서 귀엽게 해주세요.
 [context] 
 {context} 
+
+[keyword_dictionary]
+{dictionary_text}
 '''
     )
+    
+    formmated_few_shot_prompt = build_few_shot_examples()
     
     qa_prompt = ChatPromptTemplate.from_messages(
         [
         ("system", system_prompt),
-        ('assistant', 'formmated_few_shot_prompt'),
+        ('assistant', formmated_few_shot_prompt),
         MessagesPlaceholder("chat_history"),
         ("human", "{input}"),
         ]
-    )
+    ).partial(dictionary_text=dictionary_text)
+
+    print(f'\nqa_prompt >>\n{qa_prompt.partial_variables}')
+
     return qa_prompt
 
-## retrievalQA 함수 정의 
+## 전체 chain 구성 =================================================
 def build_conversational_chain():
     LANCHAIN_API_KEY = os.getenv('LANGCHAIN_API_KEY')
 
@@ -121,13 +147,13 @@ def build_conversational_chain():
 
     ##vector store에서 index 정보
     database = load_vectorstore()
-    retriever = database.as_retriever(search_kwargs={'k': 2})
+    retriever = database.as_retriever(search_kwargs={'k': 3})
 
     history_aware_retriever = build_history_aware_retriever(llm, retriever)
     
-    qa_prompt = get_qa_prompt()
-
+    qa_prompt = build_qa_prompt()
     qa_chain = create_stuff_documents_chain(llm, qa_prompt)
+    
     rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
     conversational_rag_chain = RunnableWithMessageHistory(
@@ -152,5 +178,17 @@ def stream_ai_message(user_message, session_id='default'):
     print(f'대화이력 -> , {get_session_history(session_id)}\n\n')
     print('=' * 50 + '\n')
     print(f'[stream_ai_message 함수 내 출력] session_id>> {session_id}')
+    
+    ########################################################################
+    ## vector store에서 검색된 문서 출력
+    retriever = load_vectorstore().as_retriever(search_kwargs={'k': 1})
+    search_results = retriever.invoke(user_message)
+    if search_results:
+        print(f'\nPinecone 검색 결과 >> \n{search_results[0].page_content[:100]}')
+
+    else:
+        print('\n❌ 검색 결과가 없습니다. 사전과 예시를 기반으로 GPT가 답변합니다.')
+    ########################################################################
+
     return ai_message
 

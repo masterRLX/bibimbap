@@ -11,6 +11,8 @@ upload_bibimbap_recipes.py
 bibimbap_recipe.txt
 bibimbap_recipes.json
 *crawl*.*
+*.pyc
 
 ## 폴더
 test/
+__pychche__/
